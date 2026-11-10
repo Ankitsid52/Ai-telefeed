@@ -1,0 +1,827 @@
+import SwiftUI
+
+// MARK: - 1. Data Models
+struct AIChannel: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let handle: String
+    let icon: String
+    let folder: String
+    let isPinned: Bool
+    let description: String
+    let sourceURL: String
+}
+
+enum AvailabilityCategory: String, CaseIterable, Codable {
+    case all = "All"
+    case weights = "Open Weights"
+    case runtime = "CLI & Runtime"
+    case ga = "GA API & App"
+    case paper = "Preprints"
+}
+
+struct AIMessage: Identifiable, Codable, Hashable {
+    let id: String
+    let channelId: String
+    let title: String
+    let summary: String
+    let date: String
+    let time: String
+    let availabilityBadge: String
+    let category: AvailabilityCategory
+    let specs: String
+    let cliCommand: String?
+    let url: String
+    let sourceLabel: String
+    var isRead: Bool = false
+    var isSaved: Bool = false
+    var isChecked: Bool = false
+    var reactionsCount: Int = 12
+    var userReacted: Bool = false
+}
+
+struct PersonalMemo: Identifiable, Codable, Hashable {
+    let id: String
+    let title: String
+    let body: String
+    let date: String
+}
+
+// MARK: - 2. ViewModel (Telegram-Style AI Stream + Live Sync)
+@MainActor
+final class AITeleFeedViewModel: ObservableObject {
+    @Published var channels: [AIChannel] = [
+        AIChannel(
+            id: "all",
+            name: "All AI Channels (Unified)",
+            handle: "@ai_telefeed_all",
+            icon: "sparkles",
+            folder: "All",
+            isPinned: true,
+            description: "Unified chronological stream across Hugging Face, GitHub, r/LocalLLaMA, arXiv & Hacker News",
+            sourceURL: "https://huggingface.co"
+        ),
+        AIChannel(
+            id: "hf-models",
+            name: "Hugging Face Model Drops",
+            handle: "@huggingface_models",
+            icon: "cube.box.fill",
+            folder: "Models",
+            isPinned: true,
+            description: "Official open-weight releases, quantized checkpoints & GA API announcements",
+            sourceURL: "https://huggingface.co/Qwen"
+        ),
+        AIChannel(
+            id: "github-releases",
+            name: "GitHub AI Runtimes & Releases",
+            handle: "@github_ai_releases",
+            icon: "terminal.fill",
+            folder: "GitHub",
+            isPinned: true,
+            description: "Release tags for Ollama, vLLM, vLLM-Omni & vLLM-Ascend",
+            sourceURL: "https://github.com/ollama/ollama/releases"
+        ),
+        AIChannel(
+            id: "localllama",
+            name: "r/LocalLLaMA Signals",
+            handle: "@r_localllama",
+            icon: "bubble.left.and.bubble.right.fill",
+            folder: "Community",
+            isPinned: false,
+            description: "Community quantizations, side-by-side MoE prompt benchmarks & local tools",
+            sourceURL: "https://www.reddit.com/r/LocalLLaMA/"
+        ),
+        AIChannel(
+            id: "arxiv-ai",
+            name: "arXiv cs.AI & Agent Papers",
+            handle: "@arxiv_cs_ai",
+            icon: "doc.text.fill",
+            folder: "Papers",
+            isPinned: false,
+            description: "Preprints on agentic reasoning, spatial coding agents & task routing",
+            sourceURL: "https://arxiv.org/abs/2610.28354"
+        ),
+        AIChannel(
+            id: "hn-ai",
+            name: "Hacker News Show HN (AI)",
+            handle: "@show_hn_ai",
+            icon: "bolt.horizontal.circle.fill",
+            folder: "GitHub",
+            isPinned: false,
+            description: "Open-source AI workspaces, code review tools & live Show HN launches",
+            sourceURL: "https://news.ycombinator.com/item?id=50282336"
+        )
+    ]
+
+    @Published var messages: [AIMessage] = [
+        AIMessage(
+            id: "msg-1",
+            channelId: "hf-models",
+            title: "deepseek-ai/DeepSeek-V4.1-Flash",
+            summary: "Production release on Hugging Face featuring deepseek-recipe and 2 adapter models in the DeepSeek-V4.1-Flash model tree.",
+            date: "Oct 17, 2026",
+            time: "14:20",
+            availabilityBadge: "OPEN WEIGHTS AVAILABLE",
+            category: .weights,
+            specs: "DeepSeek-V4.1-Flash • 2 Adapter Models • Production Recipe",
+            cliCommand: "huggingface-cli download deepseek-ai/DeepSeek-V4.1-Flash",
+            url: "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+            sourceLabel: "Hugging Face Model Card",
+            isRead: false,
+            isSaved: true,
+            isChecked: false,
+            reactionsCount: 61
+        ),
+        AIMessage(
+            id: "msg-2",
+            channelId: "github-releases",
+            title: "ollama/ollama — v0.40.5 & Active Release Stream",
+            summary: "Local LLM runner supporting Kimi, GLM, MiniMax, DeepSeek, gpt-oss, Qwen, and Gemma models. Reached v0.40.5 on October 14, 2026.",
+            date: "Oct 14, 2026",
+            time: "11:05",
+            availabilityBadge: "CLI & RUNTIME AVAILABLE",
+            category: .runtime,
+            specs: "Ollama v0.40.5 • macOS / Linux / Windows CLI",
+            cliCommand: "ollama pull qwen3.8:27b",
+            url: "https://github.com/ollama/ollama/releases",
+            sourceLabel: "GitHub Releases (ollama/ollama)",
+            isRead: false,
+            isSaved: true,
+            isChecked: true,
+            reactionsCount: 95
+        ),
+        AIMessage(
+            id: "msg-3",
+            channelId: "localllama",
+            title: "Same prompt: DeepSeek V4.1 Flash vs Qwen 3.8 FN",
+            summary: "Community benchmark thread (59 votes, 20 comments) comparing two top runnable MoE models side by side.",
+            date: "Nov 10, 2026",
+            time: "09:15",
+            availabilityBadge: "BENCHMARK THREAD",
+            category: .ga,
+            specs: "59 Upvotes • 20 Comments • r/LocalLLaMA",
+            cliCommand: nil,
+            url: "https://www.reddit.com/r/LocalLLaMA/comments/1xs7ffm/same_prompt_deepseek_v41_flash_vs_qwen_38_fn_94/",
+            sourceLabel: "Reddit r/LocalLLaMA",
+            isRead: false,
+            isSaved: false,
+            isChecked: false,
+            reactionsCount: 44
+        ),
+        AIMessage(
+            id: "msg-4",
+            channelId: "github-releases",
+            title: "vllm-project/vllm-omni — Pre-release & StepAudio2 TRT Fix",
+            summary: "Framework for efficient model inference with omni-modality models; isolates concurrent StepAudio2 TensorRT builds.",
+            date: "Nov 4, 2026",
+            time: "17:40",
+            availabilityBadge: "PRE-RELEASE BUILD",
+            category: .runtime,
+            specs: "vLLM-Omni • Multimodal & Audio Inference",
+            cliCommand: "git clone https://github.com/vllm-project/vllm-omni.git",
+            url: "https://github.com/vllm-project/vllm-omni/releases",
+            sourceLabel: "GitHub Releases (vllm-omni)",
+            isRead: false,
+            isSaved: false,
+            isChecked: false,
+            reactionsCount: 27
+        ),
+        AIMessage(
+            id: "msg-5",
+            channelId: "localllama",
+            title: "[Release] ISTA DeepSeek-V4.1-Flash-1017 GSQ-RCO Coder",
+            summary: "Community release (377 votes, 109 comments) of a Coder build of DeepSeek-V4.1-Flash-1017 compressed with GSQ and RCO.",
+            date: "Nov 2, 2026",
+            time: "16:12",
+            availabilityBadge: "COMPRESSED BUILD LIVE",
+            category: .weights,
+            specs: "377 Upvotes • 109 Comments • GSQ-RCO Compression",
+            cliCommand: nil,
+            url: "https://www.reddit.com/r/LocalLLaMA/comments/1xlys6k/release_ista_deepseekv41flash1017_gsqrco_coder_a/",
+            sourceLabel: "Reddit r/LocalLLaMA",
+            isRead: false,
+            isSaved: true,
+            isChecked: false,
+            reactionsCount: 80
+        ),
+        AIMessage(
+            id: "msg-6",
+            channelId: "hf-models",
+            title: "Qwen/Qwen3.8-Flash-Next",
+            summary: "First open-weight release under the Qwen3.8 Flash-Next architecture with OpenAI-compatible chat completions API support.",
+            date: "Aug 26, 2026",
+            time: "09:30",
+            availabilityBadge: "OPEN WEIGHTS AVAILABLE",
+            category: .weights,
+            specs: "Qwen3.8-Flash-Next • Open-Weight Release",
+            cliCommand: "huggingface-cli download Qwen/Qwen3.8-Flash-Next",
+            url: "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+            sourceLabel: "Hugging Face (Qwen)",
+            isRead: true,
+            isSaved: true,
+            isChecked: true,
+            reactionsCount: 72
+        ),
+        AIMessage(
+            id: "msg-7",
+            channelId: "hf-models",
+            title: "DeepSeek-V4-Pro (0813) Official GA Release",
+            summary: "Flagship 1.6T-parameter preview family reaches GA across app, web, and API (deepseek-v4-pro) with 1M context and 50% off-peak pricing.",
+            date: "Aug 13, 2026",
+            time: "16:00",
+            availabilityBadge: "GA API & APP LIVE",
+            category: .ga,
+            specs: "1.6T Params • 1M Context • 50% Off-Peak API Discount",
+            cliCommand: nil,
+            url: "https://huggingface.co/blog/ResterChed/deepseek-v4-pro-ga-release",
+            sourceLabel: "Hugging Face Community Blog",
+            isRead: true,
+            isSaved: false,
+            isChecked: true,
+            reactionsCount: 110
+        ),
+        AIMessage(
+            id: "msg-8",
+            channelId: "arxiv-ai",
+            title: "S-Agent 2.0: Spatial Reasoning with a General Coding Agent",
+            summary: "Demonstrates how agentic VLMs actively gather evidence with 3D perception tools using a general coding agent for spatial reasoning.",
+            date: "Oct 20, 2026",
+            time: "10:00",
+            availabilityBadge: "PREPRINT AVAILABLE",
+            category: .paper,
+            specs: "arXiv:2610.28354 • Agentic VLM & 3D Perception",
+            cliCommand: nil,
+            url: "https://arxiv.org/abs/2610.28354",
+            sourceLabel: "arXiv (2610.28354)",
+            isRead: true,
+            isSaved: false,
+            isChecked: false,
+            reactionsCount: 32
+        ),
+        AIMessage(
+            id: "msg-9",
+            channelId: "hn-ai",
+            title: "Show HN: Open-source AI workspace with shared procedural memory",
+            summary: "Community launch (github.com/thewariend) of an open-source AI workspace featuring shared procedural memory.",
+            date: "Oct 29, 2026",
+            time: "15:45",
+            availabilityBadge: "OPEN SOURCE REPO",
+            category: .runtime,
+            specs: "Show HN • github.com/thewariend",
+            cliCommand: nil,
+            url: "https://news.ycombinator.com/item?id=50282336",
+            sourceLabel: "Hacker News (#50282336)",
+            isRead: false,
+            isSaved: false,
+            isChecked: false,
+            reactionsCount: 20
+        )
+    ]
+
+    @Published var watchedKeywords: [String] = ["DeepSeek", "Qwen", "Ollama", "vLLM", "Llama 4"]
+    @Published var memos: [PersonalMemo] = [
+        PersonalMemo(
+            id: "memo-1",
+            title: "Local Benchmark Reminder",
+            body: "Test DeepSeek-V4.1-Flash vs Qwen3.8-Flash-Next with Ollama v0.40.5.",
+            date: "Saved Today"
+        )
+    ]
+    @Published var searchText: String = ""
+    @Published var selectedCategory: AvailabilityCategory = .all
+    @Published var unreadOnly: Bool = false
+    @Published var isSyncing: Bool = false
+
+    var totalUnreadCount: Int {
+        messages.filter { !$0.isRead }.count
+    }
+
+    func unreadCount(for channelId: String) -> Int {
+        if channelId == "all" { return totalUnreadCount }
+        return messages.filter { $0.channelId == channelId && !$0.isRead }.count
+    }
+
+    func matchedKeyword(for msg: AIMessage) -> String? {
+        watchedKeywords.first { kw in
+            msg.title.localizedCaseInsensitiveContains(kw) ||
+            msg.summary.localizedCaseInsensitiveContains(kw) ||
+            msg.specs.localizedCaseInsensitiveContains(kw)
+        }
+    }
+
+    func toggleSaved(_ id: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
+        messages[idx].isSaved.toggle()
+        messages[idx].isRead = true
+    }
+
+    func toggleChecked(_ id: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
+        messages[idx].isChecked.toggle()
+        messages[idx].isRead = true
+    }
+
+    func toggleRead(_ id: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
+        messages[idx].isRead.toggle()
+    }
+
+    func toggleReaction(_ id: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
+        messages[idx].userReacted.toggle()
+        messages[idx].reactionsCount += messages[idx].userReacted ? 1 : -1
+        messages[idx].isRead = true
+    }
+
+    func markAllRead() {
+        for idx in messages.indices {
+            messages[idx].isRead = true
+        }
+    }
+
+    func addKeyword(_ keyword: String) {
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !watchedKeywords.contains(trimmed) else { return }
+        watchedKeywords.append(trimmed)
+    }
+
+    func removeKeyword(_ keyword: String) {
+        watchedKeywords.removeAll { $0 == keyword }
+    }
+
+    func addMemo(body: String) {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        memos.insert(
+            PersonalMemo(id: UUID().uuidString, title: "Personal AI Note", body: trimmed, date: "Just now"),
+            at: 0
+        )
+    }
+
+    // Live sync from Hacker News Algolia API
+    func fetchLiveAICommunityUpdates() async {
+        isSyncing = true
+        defer { isSyncing = false }
+        guard let url = URL(string: "https://hn.algolia.com/api/v1/search_by_date?query=LLM%20OR%20DeepSeek%20OR%20Qwen%20OR%20vLLM&tags=story&hitsPerPage=5") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let hits = json["hits"] as? [[String: Any]] {
+                for hit in hits {
+                    let objectID = hit["objectID"] as? String ?? UUID().uuidString
+                    let msgId = "hn-live-\(objectID)"
+                    guard !messages.contains(where: { $0.id == msgId }) else { continue }
+                    let title = hit["title"] as? String ?? "Live AI Community Update"
+                    let author = hit["author"] as? String ?? "developer"
+                    let points = hit["points"] as? Int ?? 1
+                    let storyURL = hit["url"] as? String ?? "https://news.ycombinator.com/item?id=\(objectID)"
+
+                    let liveMsg = AIMessage(
+                        id: msgId,
+                        channelId: "hn-ai",
+                        title: title,
+                        summary: "Live community signal posted by @\(author) on Hacker News (\(points) pts).",
+                        date: "Live Sync",
+                        time: "Now",
+                        availabilityBadge: "LIVE SIGNAL",
+                        category: .runtime,
+                        specs: "HN #\(objectID) • Live API Sync",
+                        cliCommand: nil,
+                        url: storyURL,
+                        sourceLabel: "Hacker News Live API",
+                        isRead: false,
+                        isSaved: false,
+                        isChecked: false,
+                        reactionsCount: points
+                    )
+                    messages.insert(liveMsg, at: 0)
+                }
+            }
+        } catch {
+            print("Sync failed: \(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - 3. App Entry Point
+@main
+struct AICommunityTeleFeedApp: App {
+    @StateObject private var vm = AITeleFeedViewModel()
+
+    var body: some Scene {
+        WindowGroup {
+            MainTabContainerView(vm: vm)
+                .preferredColorScheme(.dark)
+        }
+    }
+}
+
+// MARK: - 4. Root Tab Bar View
+struct MainTabContainerView: View {
+    @ObservedObject var vm: AITeleFeedViewModel
+    @State private var selectedChannel: AIChannel?
+
+    var body: some View {
+        TabView {
+            // TAB 1: Telegram-Style Channels
+            NavigationSplitView {
+                List(selection: $selectedChannel) {
+                    Section("Pinned & Active AI Channels") {
+                        ForEach(vm.channels) { channel in
+                            NavigationLink(value: channel) {
+                                ChannelRowView(
+                                    channel: channel,
+                                    unreadCount: vm.unreadCount(for: channel.id)
+                                )
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("AI TeleFeed")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Read All") {
+                            vm.markAllRead()
+                        }
+                        .font(.caption.bold())
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            Task { await vm.fetchLiveAICommunityUpdates() }
+                        } label: {
+                            if vm.isSyncing {
+                                ProgressView()
+                            } else {
+                                Label("Live Sync", systemImage: "arrow.clockwise")
+                            }
+                        }
+                    }
+                }
+            } detail: {
+                ChannelFeedDetailView(
+                    channel: selectedChannel ?? vm.channels[0],
+                    vm: vm
+                )
+            }
+            .tabItem {
+                Label("Channels", systemImage: "bubble.left.and.bubble.right.fill")
+            }
+            .badge(vm.totalUnreadCount)
+
+            // TAB 2: Available Radar
+            AvailableRadarView(vm: vm)
+                .tabItem {
+                    Label("Available", systemImage: "antenna.radiowaves.left.and.right")
+                }
+
+            // TAB 3: Saved Messages Vault
+            SavedVaultView(vm: vm)
+                .tabItem {
+                    Label("Saved Vault", systemImage: "bookmark.fill")
+                }
+
+            // TAB 4: Keyword Alerts & Sync
+            AlertsAndSourcesView(vm: vm)
+                .tabItem {
+                    Label("Alerts", systemImage: "bell.badge.fill")
+                }
+        }
+        .tint(.cyan)
+    }
+}
+
+// MARK: - 5. Channel Row & Feed Detail Views
+struct ChannelRowView: View {
+    let channel: AIChannel
+    let unreadCount: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: [.cyan, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 42, height: 42)
+                Image(systemName: channel.icon)
+                    .foregroundStyle(.black)
+                    .font(.system(size: 16, weight: .bold))
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    if channel.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.cyan)
+                    }
+                    Text(channel.name)
+                        .font(.subheadline.bold())
+                        .lineLimit(1)
+                    Spacer()
+                    if unreadCount > 0 {
+                        Text("\(unreadCount)")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Color.cyan)
+                            .foregroundStyle(.black)
+                            .clipShape(Capsule())
+                    }
+                }
+                Text(channel.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+}
+
+struct ChannelFeedDetailView: View {
+    let channel: AIChannel
+    @ObservedObject var vm: AITeleFeedViewModel
+
+    var filteredMessages: [AIMessage] {
+        vm.messages.filter { msg in
+            if channel.id != "all" && msg.channelId != channel.id { return false }
+            if vm.selectedCategory != .all && msg.category != vm.selectedCategory { return false }
+            if vm.unreadOnly && msg.isRead { return false }
+            if !vm.searchText.isEmpty {
+                return msg.title.localizedCaseInsensitiveContains(vm.searchText) ||
+                       msg.summary.localizedCaseInsensitiveContains(vm.searchText) ||
+                       msg.specs.localizedCaseInsensitiveContains(vm.searchText)
+            }
+            return true
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Filter Strip
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(AvailabilityCategory.allCases, id: \.self) { category in
+                        Button {
+                            vm.selectedCategory = category
+                        } label: {
+                            Text(category.rawValue)
+                                .font(.caption.bold())
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(vm.selectedCategory == category ? Color.cyan : Color.secondary.opacity(0.18))
+                                .foregroundStyle(vm.selectedCategory == category ? .black : .primary)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    Toggle("Unread Only", isOn: $vm.unreadOnly)
+                        .toggleStyle(.button)
+                        .font(.caption.bold())
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+
+            List(filteredMessages) { msg in
+                TelegramBubbleCard(
+                    msg: msg,
+                    matchedKeyword: vm.matchedKeyword(for: msg),
+                    onToggleSave: { vm.toggleSaved(msg.id) },
+                    onToggleCheck: { vm.toggleChecked(msg.id) },
+                    onToggleRead: { vm.toggleRead(msg.id) },
+                    onToggleReaction: { vm.toggleReaction(msg.id) }
+                )
+                .listRowSeparator(.hidden)
+            }
+            .listStyle(.plain)
+            .searchable(text: $vm.searchText, prompt: "Search models, GGUF, vLLM, papers...")
+        }
+        .navigationTitle(channel.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct TelegramBubbleCard: View {
+    let msg: AIMessage
+    let matchedKeyword: String?
+    let onToggleSave: () -> Void
+    let onToggleCheck: () -> Void
+    let onToggleRead: () -> Void
+    let onToggleReaction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text(msg.availabilityBadge)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.green.opacity(0.2))
+                    .foregroundStyle(.green)
+                    .clipShape(Capsule())
+
+                if let kw = matchedKeyword {
+                    Text("🔔 \(kw)")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.orange.opacity(0.2))
+                        .foregroundStyle(.orange)
+                        .clipShape(Capsule())
+                }
+
+                Spacer()
+                Text("\(msg.date) • \(msg.time)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(msg.title)
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            Text(msg.summary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Text(msg.specs)
+                .font(.caption.monospaced())
+                .foregroundStyle(.cyan)
+
+            if let cli = msg.cliCommand, !cli.isEmpty {
+                HStack {
+                    Text("$ \(cli)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(8)
+                .background(Color.black.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            HStack(spacing: 14) {
+                Button(action: onToggleReaction) {
+                    Label("🔥 \(msg.reactionsCount)", systemImage: msg.userReacted ? "flame.fill" : "flame")
+                }
+                Button(action: onToggleSave) {
+                    Label(msg.isSaved ? "Saved" : "Save", systemImage: msg.isSaved ? "bookmark.fill" : "bookmark")
+                }
+                Button(action: onToggleCheck) {
+                    Label(msg.isChecked ? "Checked" : "Check", systemImage: msg.isChecked ? "checkmark.circle.fill" : "circle")
+                }
+                Spacer()
+                if let destination = URL(string: msg.url) {
+                    Link(destination: destination) {
+                        Label("Source", systemImage: "arrow.up.right.square")
+                    }
+                }
+            }
+            .font(.caption.bold())
+            .buttonStyle(.borderless)
+        }
+        .padding(14)
+        .background(Color(red: 0.09, green: 0.15, blue: 0.20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(msg.isRead ? Color.white.opacity(0.08) : Color.cyan.opacity(0.5), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - 6. Available Radar, Saved Vault & Alerts Views
+struct AvailableRadarView: View {
+    @ObservedObject var vm: AITeleFeedViewModel
+
+    var body: some View {
+        NavigationStack {
+            List(vm.messages) { msg in
+                HStack(alignment: .top, spacing: 12) {
+                    Button {
+                        vm.toggleChecked(msg.id)
+                    } label: {
+                        Image(systemName: msg.isChecked ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(msg.isChecked ? .green : .secondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(msg.availabilityBadge)
+                            .font(.caption2.bold())
+                            .foregroundStyle(.green)
+                        Text(msg.title)
+                            .font(.subheadline.bold())
+                            .strikethrough(msg.isChecked)
+                        Text(msg.specs)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if let destination = URL(string: msg.url) {
+                        Link(destination: destination) {
+                            Image(systemName: "arrow.up.right.circle.fill")
+                                .font(.title3)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .navigationTitle("Available Now Radar")
+        }
+    }
+}
+
+struct SavedVaultView: View {
+    @ObservedObject var vm: AITeleFeedViewModel
+    @State private var newMemoText: String = ""
+
+    var savedMessages: [AIMessage] {
+        vm.messages.filter { $0.isSaved }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                List {
+                    Section("Personal Availability Notes") {
+                        ForEach(vm.memos) { memo in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(memo.title).font(.caption.bold()).foregroundStyle(.cyan)
+                                Text(memo.body).font(.subheadline)
+                            }
+                        }
+                    }
+                    Section("Bookmarked Channel Releases (\(savedMessages.count))") {
+                        ForEach(savedMessages) { msg in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(msg.title).font(.subheadline.bold())
+                                Text(msg.summary).font(.caption).foregroundStyle(.secondary)
+                                if let destination = URL(string: msg.url) {
+                                    Link(msg.sourceLabel, destination: destination)
+                                        .font(.caption.bold())
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HStack {
+                    TextField("Save a model note or link...", text: $newMemoText)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Save") {
+                        vm.addMemo(body: newMemoText)
+                        newMemoText = ""
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            }
+            .navigationTitle("Saved Messages")
+        }
+    }
+}
+
+struct AlertsAndSourcesView: View {
+    @ObservedObject var vm: AITeleFeedViewModel
+    @State private var newKeyword: String = ""
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Add Keyword Alert") {
+                    HStack {
+                        TextField("e.g., Qwen4, GGUF, FP8...", text: $newKeyword)
+                        Button("Add") {
+                            vm.addKeyword(newKeyword)
+                            newKeyword = ""
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+
+                Section("Active Watched Keywords") {
+                    ForEach(vm.watchedKeywords, id: \.self) { kw in
+                        HStack {
+                            Label(kw, systemImage: "bell.fill")
+                                .foregroundStyle(.orange)
+                            Spacer()
+                            Button(role: .destructive) {
+                                vm.removeKeyword(kw)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Keyword Alerts")
+        }
+    }
+}
+
+#Preview {
+    MainTabContainerView(vm: AITeleFeedViewModel())
+        .preferredColorScheme(.dark)
+}
